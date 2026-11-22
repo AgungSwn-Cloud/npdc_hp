@@ -151,6 +151,11 @@ table.keep tr.tot td.stick{background:#f4f8fa}
 summary.filtersum{cursor:pointer;font-weight:700;color:var(--lagoon);padding:4px 0;font-size:14px}
 .mob{display:none}
 .twocol{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+/* Neraca: kedua kolom sama tinggi, kotak TOTAL AKTIVA dan TOTAL PASSIVA sejajar di dasar */
+.nrcols{align-items:stretch}
+.nrcols .stmt{display:flex;flex-direction:column;margin-bottom:0}
+.nrcols .nrfill{flex:1 1 auto;min-height:10px}
+.nrcols .stmt>.srow.big{margin:0 0 4px}
 
 /* ===== Modal & notifikasi ===== */
 .modal{position:fixed;inset:0;background:rgba(11,46,69,.45);display:none;align-items:center;justify-content:center;z-index:150;padding:20px}
@@ -864,13 +869,13 @@ function renderNeraca(){
   const tot=(lbl,v)=>`<div class="srow nopct tot"><span></span><span>${lbl}</span><span class="sv">${fmt(v)}</span></div>`;
   const aktiva=`<div class="stmt"><div class="shead">Aktiva lancar</div>${r.lancar.filter(keep).map(row).join('')}${tot('TOTAL AKTIVA LANCAR',r.totalLancar)}
     <div class="shead">Aktiva tetap</div>${r.tetap.filter(keep).map(row).join('')}${r.akum.filter(keep).map(row).join('')}${tot('TOTAL AKTIVA TETAP',r.totalTetap)}
-    <div class="srow nopct big"><span></span><span>TOTAL AKTIVA</span><span class="sv">${rp(r.totalAktiva)}</span></div></div>`;
+    <div class="nrfill"></div><div class="srow nopct big"><span></span><span>TOTAL AKTIVA</span><span class="sv">${rp(r.totalAktiva)}</span></div></div>`;
   const passiva=`<div class="stmt"><div class="shead">Hutang</div>${r.hutang.filter(keep).map(row).join('')}${tot('TOTAL HUTANG',r.totalHutang)}
     <div class="shead">Modal</div>${r.modal.filter(keep).map(row).join('')}${tot('TOTAL MODAL',r.totalModal)}
     <div class="shead">Laba</div><div class="srow nopct"><span></span><span>Laba bersih berjalan</span><span class="sv">${fmt(r.laba)}</span></div>
-    <div class="srow nopct big"><span></span><span>TOTAL PASSIVA</span><span class="sv">${rp(r.totalPassiva)}</span></div></div>`;
+    <div class="nrfill"></div><div class="srow nopct big"><span></span><span>TOTAL PASSIVA</span><span class="sv">${rp(r.totalPassiva)}</span></div></div>`;
   const ok=Math.abs(r.selisih)<0.5;
-  $('nrBody').innerHTML=`<div class="strip">${ok?'<span class="badge ok">Neraca seimbang</span>':`<span class="badge bad">Selisih aktiva − passiva: ${rp(r.selisih)}</span>`}</div><div class="twocol">${aktiva}${passiva}</div>`;
+  $('nrBody').innerHTML=`<div class="strip">${ok?'<span class="badge ok">Neraca seimbang</span>':`<span class="badge bad">Selisih aktiva − passiva: ${rp(r.selisih)}</span>`}</div><div class="twocol nrcols">${aktiva}${passiva}</div>`;
 }
 
 /* ============ Komparasi ============ */
