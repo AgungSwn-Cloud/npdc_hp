@@ -156,6 +156,15 @@ summary.filtersum{cursor:pointer;font-weight:700;color:var(--lagoon);padding:4px
 .nrcols .stmt{display:flex;flex-direction:column;margin-bottom:0}
 .nrcols .nrfill{flex:1 1 auto;min-height:10px}
 .nrcols .stmt>.srow.big{margin:0 0 4px}
+/* Daftar jurnal & dashboard: kode akun dipisah garis samar dari nama akun */
+.akk{display:inline-block;min-width:32px;margin-right:8px;padding-right:8px;border-right:1px solid #d3dee7;color:var(--muted);font-variant-numeric:tabular-nums;text-align:right;line-height:1.25}
+@media(max-width:760px){.akk{min-width:28px;margin-right:6px;padding-right:6px}}
+/* Garis samar pemisah kode akun dan nama akun di semua halaman */
+.srow .sk{text-align:right;padding-right:8px;border-right:1px solid #d3dee7}
+.pk-kode{text-align:right;padding-right:10px;border-right:1px solid #d3dee7}
+.pr-main .akk{font-weight:600}
+@media(min-width:761px){table td[data-label="Kode"]{border-right:1px solid #e3ebf1;width:1%;white-space:nowrap}}
+td.stick .akk{min-width:30px}
 /* Neraca: akumulasi penyusutan di bawah akun yang disusutkan + nilai buku */
 .srow.ap{color:var(--muted)}
 .srow.ap .sn{padding-left:14px}
@@ -714,7 +723,7 @@ function initPeriodePage(p,fn){
 function entryRows(rows,action){
   const cols=action?7:6;
   if(!rows||!rows.length)return `<tr><td colspan="${cols}" class="empty">Tidak ada jurnal.</td></tr>`;
-  const ak=l=>l.map(x=>`${esc(x.akun)} ${esc(x.nama)}`).join('<br>');
+  const ak=l=>l.map(x=>`<span class="akk">${esc(x.akun)}</span>${esc(x.nama)}`).join('<br>');
   return rows.map(e=>{
     const v=e.status==='Batal';
     const canEdit=e.debit.length===1&&e.kredit.length===1;
@@ -821,7 +830,7 @@ function bbMore(){
   const r=state.bb;if(!r)return;
   const part=r.baris.slice(state.bbShown,state.bbShown+120);
   if(!r.baris.length)$('bbBody').innerHTML='<tr><td colspan="7" class="empty">Tidak ada mutasi pada periode ini.</td></tr>';
-  else $('bbBody').insertAdjacentHTML('beforeend',part.map(x=>`<tr><td data-label="Tanggal">${tglId(x.tgl)}</td><td data-label="OPR">${esc(x.opr)}</td><td data-label="Keterangan">${esc(x.ket)}${x.ktx?`<div class="muted">TX ${esc(x.ktx)}</div>`:''}</td><td data-label="Akun lawan">${esc(x.lawan)} ${esc(x.lawanNama)}</td><td data-label="Debet" class="num">${fmt(x.debit)}</td><td data-label="Kredit" class="num">${fmt(x.kredit)}</td><td data-label="Saldo" class="num">${fmt(x.saldo)}</td></tr>`).join(''));
+  else $('bbBody').insertAdjacentHTML('beforeend',part.map(x=>`<tr><td data-label="Tanggal">${tglId(x.tgl)}</td><td data-label="OPR">${esc(x.opr)}</td><td data-label="Keterangan">${esc(x.ket)}${x.ktx?`<div class="muted">TX ${esc(x.ktx)}</div>`:''}</td><td data-label="Akun lawan">${x.lawan?`<span class="akk">${esc(x.lawan)}</span>`:''}${esc(x.lawanNama)}</td><td data-label="Debet" class="num">${fmt(x.debit)}</td><td data-label="Kredit" class="num">${fmt(x.kredit)}</td><td data-label="Saldo" class="num">${fmt(x.saldo)}</td></tr>`).join(''));
   state.bbShown+=part.length;
   $('bbInfo').textContent=`${nf.format(state.bbShown)} dari ${nf.format(r.baris.length)} baris`;
   $('bbMore').style.display=state.bbShown<r.baris.length?'inline-block':'none';
@@ -835,7 +844,7 @@ function renderPosting(){
   ['Aset','Liabilitas','Ekuitas','Pendapatan','Beban','Lainnya'].forEach(g=>{
     const rows=r.baris.filter(x=>x.kategori===g&&!(hide&&!x.awal&&!x.debit&&!x.kredit&&!x.akhir));
     if(!rows.length)return;
-    h+=`<tr class="grp"><td colspan="5">${g}</td></tr>`+rows.map(x=>`<tr><td class="stick"><b>${esc(x.kode)}</b> ${esc(x.nama)}</td><td class="num">${fmt(x.awal)}</td><td class="num">${fmt(x.debit)}</td><td class="num">${fmt(x.kredit)}</td><td class="num"><b>${fmt(x.akhir)}</b></td></tr>`).join('');
+    h+=`<tr class="grp"><td colspan="5">${g}</td></tr>`+rows.map(x=>`<tr><td class="stick"><span class="akk">${esc(x.kode)}</span>${esc(x.nama)}</td><td class="num">${fmt(x.awal)}</td><td class="num">${fmt(x.debit)}</td><td class="num">${fmt(x.kredit)}</td><td class="num"><b>${fmt(x.akhir)}</b></td></tr>`).join('');
   });
   h+=`<tr class="tot"><td class="stick">Total mutasi</td><td></td><td class="num">${fmt(r.totalDebit)}</td><td class="num">${fmt(r.totalKredit)}</td><td></td></tr>`;
   $('psBody').innerHTML=h;
@@ -920,7 +929,7 @@ function renderKomp(){
   const sumArr=a=>a.reduce((s,v)=>s+v,0);
   const cell=(v,base)=>pc?pct(base?v/base:0):fmt(v);
   const tp=k.totalPendapatan,tpAll=sumArr(tp);
-  const line=(x,cls)=>{const tot=sumArr(x.nilai);return `<tr class="${cls||''}"><td class="stick"><b>${esc(x.kode)}</b> ${esc(x.nama)}</td>${ms.map(m=>`<td class="num">${cell(x.nilai[m],tp[m])}</td>`).join('')}<td class="num"><b>${cell(tot,tpAll)}</b></td></tr>`;};
+  const line=(x,cls)=>{const tot=sumArr(x.nilai);return `<tr class="${cls||''}"><td class="stick"><span class="akk">${esc(x.kode)}</span>${esc(x.nama)}</td>${ms.map(m=>`<td class="num">${cell(x.nilai[m],tp[m])}</td>`).join('')}<td class="num"><b>${cell(tot,tpAll)}</b></td></tr>`;};
   const sum=(lbl,arr,cls)=>line({kode:'',nama:lbl,nilai:arr},cls||'tot');
   const keep=x=>z||sumArr(x.nilai.map(Math.abs))>0;
   let h=`<thead><tr><th class="stick">Akun</th>${ms.map(m=>`<th class="num">${BLN[m]}</th>`).join('')}<th class="num">Total</th></tr></thead><tbody>`;
@@ -935,7 +944,7 @@ function initOpname(){if(!$('opTanggal').value)loadOpname();}
 function loadOpname(){
   rpc('getOpname',[$('opTanggal').value],r=>{
     state.op=r;$('opTanggal').value=r.tanggal;
-    $('opBody').innerHTML=r.baris.map((x,i)=>`<tr><td data-label="Akun"><b>${esc(x.kode)}</b> ${esc(x.nama)}</td><td data-label="Saldo buku" class="num">${fmt(x.buku)}</td><td data-label="Fisik"><input class="fisik" inputmode="numeric" data-i="${i}" value="${x.fisik==null?'':nf.format(x.fisik)}" oninput="fmtInput(this);opHitung()" placeholder="0"></td><td data-label="Selisih" class="num" id="opSel${i}"></td></tr>`).join('')||'<tr><td colspan="4" class="empty">Belum ada akun dengan subkategori "Kas &amp; Bank".</td></tr>';
+    $('opBody').innerHTML=r.baris.map((x,i)=>`<tr><td data-label="Akun"><span class="akk">${esc(x.kode)}</span>${esc(x.nama)}</td><td data-label="Saldo buku" class="num">${fmt(x.buku)}</td><td data-label="Fisik"><input class="fisik" inputmode="numeric" data-i="${i}" value="${x.fisik==null?'':nf.format(x.fisik)}" oninput="fmtInput(this);opHitung()" placeholder="0"></td><td data-label="Selisih" class="num" id="opSel${i}"></td></tr>`).join('')||'<tr><td colspan="4" class="empty">Belum ada akun dengan subkategori "Kas &amp; Bank".</td></tr>';
     opHitung();
   });
 }
@@ -1264,7 +1273,7 @@ function akunCombo(selId,side){
           if(g!==grp){grp=g;h+=`<div class="pr-grp">${g}</div>`;}
         }
         const tag=a.p>0?(a.m==='tok'?` · <b>prediksi ${Math.round(a.p*100)}%</b>`:` · <b>sering dipasangkan</b>`):(a.f?` · ${a.f}× dipakai`:'');
-        h+=`<button type="button" class="pr-item${i===act?' act':''}" data-i="${i}"><div class="pr-main">${esc(a.k)} — ${esc(a.n)}</div><div class="pr-sub">${esc(a.s)}${tag}</div></button>`;
+        h+=`<button type="button" class="pr-item${i===act?' act':''}" data-i="${i}"><div class="pr-main"><span class="akk">${esc(a.k)}</span>${esc(a.n)}</div><div class="pr-sub">${esc(a.s)}${tag}</div></button>`;
       });
       list.innerHTML=h;
     }
@@ -2026,7 +2035,8 @@ body.r-admin .dh-comp{display:none}
   function teksTerpilih(sel) { var o = sel.options[sel.selectedIndex]; return o ? o.text : ''; }
   function sinkron(sel, btn) {
     var t = teksTerpilih(sel), kosong = !sel.value;
-    btn.querySelector('.pk-val').textContent = t || '-- Pilih akun --';
+    var pc = (!kosong && t) ? pecah(t) : null;
+    btn.querySelector('.pk-val').innerHTML = (pc && pc[0]) ? '<span class="akk">' + esc(pc[0]) + '</span>' + esc(pc[1]) : esc(t || '-- Pilih akun --');
     btn.classList.toggle('ph', kosong || !t);
   }
   function gambar() {
