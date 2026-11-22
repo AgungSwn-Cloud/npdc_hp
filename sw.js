@@ -1,7 +1,7 @@
 /* Service worker sederhana: hanya menyimpan cangkang aplikasi (halaman + ikon) dari GitHub.
    Permintaan ke script.google.com tidak pernah disentuh, jadi data selalu terbaru.
    Naikkan angka VERSI setiap kali index.html diperbarui agar HP mengambil versi baru. */
-const VERSI = 'npdc-v4';
+const VERSI = 'npdc-v5';
 const CANGKANG = ['./', 'index.html', 'icon-192.png', 'apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
