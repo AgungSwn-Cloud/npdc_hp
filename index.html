@@ -295,6 +295,13 @@ summary.filtersum{cursor:pointer;font-weight:700;color:var(--lagoon);padding:4px
 </style>
 </head>
 <body>
+<script>
+// TAMBAHAN BARU: tampilkan galat JavaScript di layar (membantu diagnosa di HP)
+(function(){function t(m){try{var b=document.getElementById('errBox');if(!b){b=document.createElement('div');b.id='errBox';b.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:99999;background:#7f1d1d;color:#fff;font:12px/1.4 monospace;padding:10px 12px;border-radius:10px;white-space:pre-wrap;word-break:break-word;max-height:40vh;overflow:auto';b.onclick=function(){b.remove();};(document.body||document.documentElement).appendChild(b);}b.textContent+=m+'\n';}catch(e){}}
+window.addEventListener('error',function(e){t('Galat: '+(e.message||'?')+(e.lineno?' (baris '+e.lineno+')':''));});
+window.addEventListener('unhandledrejection',function(e){t('Galat: '+((e.reason&&e.reason.message)||e.reason));});})();
+</script>
+
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><symbol id="appicon" viewBox="0 0 512 512"><defs><linearGradient id="gBg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#10425F"/><stop offset="1" stop-color="#07202F"/></linearGradient><linearGradient id="gTank" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#63CCFF"/><stop offset=".55" stop-color="#1E9BFF"/><stop offset="1" stop-color="#0B73E0"/></linearGradient>
 <clipPath id="cTank"><path d="M186 250a70 70 0 0 1 140 0V398a34 34 0 0 1-34 34H220a34 34 0 0 1-34-34Z"/></clipPath></defs><rect width="512" height="512" rx="112" fill="url(#gBg)"/><g transform="translate(256 256) scale(1.12) translate(-256 -259)">
 <g fill="none" stroke="#9BDDFF" stroke-width="7" opacity=".95"><circle cx="372" cy="178" r="13"/><circle cx="398" cy="130" r="8"/><circle cx="358" cy="98" r="6"/></g>
@@ -1452,7 +1459,7 @@ function kirimLogin(ev){
       busy(false);b.disabled=false;b.textContent='Masuk';
       $('lgSandi').value='';
       const ok=simpanTok(r.token);
-      if(ok){location.reload();return;}
+      /* diubah: tidak reload (reload di iframe Apps Script bisa jadi blank putih di iPhone) */
       A.peran=r.peran;A.email=r.email;A.nama=r.nama;terapkan();
       $('lgBox').remove();state.form=null;showPage('dashboard');
     })
@@ -1463,7 +1470,7 @@ function kirimLogin(ev){
     .login($('lgEmail').value,$('lgSandi').value);
 }
 function keluar(){
-  const selesai=()=>{hapusTok();location.reload();};
+  const selesai=()=>{hapusTok();A.peran='';state.form=null;state.masters={};tampilLogin('');};
   rpc('logout',[],selesai,selesai);
 }
 document.addEventListener('click',ev=>{if(ev.target&&ev.target.id==='btnKeluar'){ev.preventDefault();keluar();}});
@@ -1929,19 +1936,6 @@ body.r-admin .dh-comp{display:none}
 </script>
 
 <style id="tebingPicker">
-/* ---------- A) NUANSA TEBING di sisi kanan layar ---------- */
-html{--cliff-w:60px}
-@media(max-width:980px){html{--cliff-w:38px}}
-@media(max-width:760px){html{--cliff-w:20px}}
-body{padding-right:var(--cliff-w)}
-body::after{
-  content:'';position:fixed;top:0;right:0;bottom:0;width:var(--cliff-w);z-index:40;pointer-events:none;
-  background-image:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2056%20520'%20preserveAspectRatio='none'%3E%3Cdefs%3E%3ClinearGradient%20id='g'%20x1='0'%20x2='1'%20y1='0'%20y2='0'%3E%3Cstop%20offset='0'%20stop-color='%23ead8b4'/%3E%3Cstop%20offset='.42'%20stop-color='%23cfab78'/%3E%3Cstop%20offset='1'%20stop-color='%237d5b3d'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath%20d='M21,0%20L21,47%20L27,47%20L27,83%20L23,83%20L23,128%20L29,128%20L29,167%20L26,167%20L26,201%20L29,201%20L29,223%20L22,223%20L22,255%20L29,255%20L29,298%20L22,298%20L22,318%20L19,318%20L19,339%20L15,339%20L15,378%20L7,378%20L7,412%20L13,412%20L13,450%20L7,450%20L7,477%20L13,477%20L13,490%20L7,490%20L7,506%20L21,506%20L21,520%20L56,520%20L56,0%20Z'%20fill='url(%23g)'/%3E%3Cpath%20d='M23,22%20L56,25'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M23,24.2%20L56,26.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M29,56%20L56,58'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M29,58.2%20L56,60.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M25,99%20L56,100'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M25,101.2%20L56,103.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M31,133%20L56,135'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M31,135.2%20L56,137.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M31,166%20L56,169'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M31,168.2%20L56,170.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M31,201%20L56,202'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M31,203.2%20L56,205.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M24,229%20L56,232'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M24,231.2%20L56,233.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M31,258%20L56,260'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M31,260.2%20L56,262.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M31,287%20L56,289'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M31,289.2%20L56,291.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M21,325%20L56,326'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M21,327.2%20L56,329.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M17,351%20L56,354'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M17,353.2%20L56,355.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M17,377%20L56,378'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M17,379.2%20L56,381.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M9,409%20L56,410'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M9,411.2%20L56,413.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M9,450%20L56,452'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M9,452.2%20L56,454.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M15,488%20L56,490'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M15,490.2%20L56,492.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M44,319%20L44,357'%20stroke='%234e3827'%20stroke-opacity='.24'%20stroke-width='1.4'%20stroke-linecap='round'/%3E%3Cpath%20d='M27,418%20L26,452'%20stroke='%234e3827'%20stroke-opacity='.24'%20stroke-width='1.4'%20stroke-linecap='round'/%3E%3Cpath%20d='M27,391%20L25,417'%20stroke='%234e3827'%20stroke-opacity='.24'%20stroke-width='1.4'%20stroke-linecap='round'/%3E%3Cpath%20d='M49,268%20L48,325'%20stroke='%234e3827'%20stroke-opacity='.24'%20stroke-width='1.4'%20stroke-linecap='round'/%3E%3Cpath%20d='M41,379%20L42,417'%20stroke='%234e3827'%20stroke-opacity='.24'%20stroke-width='1.4'%20stroke-linecap='round'/%3E%3Cpath%20d='M44,244%20L42,294'%20stroke='%234e3827'%20stroke-opacity='.24'%20stroke-width='1.4'%20stroke-linecap='round'/%3E%3Cpath%20d='M37,232%20L35,271'%20stroke='%234e3827'%20stroke-opacity='.24'%20stroke-width='1.4'%20stroke-linecap='round'/%3E%3Cpath%20d='M49,168%20L49,231'%20stroke='%234e3827'%20stroke-opacity='.24'%20stroke-width='1.4'%20stroke-linecap='round'/%3E%3Ccircle%20cx='26'%20cy='37'%20r='0.8'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='33'%20cy='242'%20r='1'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='20'%20cy='411'%20r='1.3'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='41'%20cy='441'%20r='1'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='44'%20cy='53'%20r='0.8'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='35'%20cy='23'%20r='1.3'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='43'%20cy='206'%20r='1.3'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='49'%20cy='81'%20r='1.3'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='50'%20cy='442'%20r='1.3'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='28'%20cy='459'%20r='1'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='31'%20cy='337'%20r='0.8'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='39'%20cy='481'%20r='0.8'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='35'%20cy='387'%20r='0.8'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='30'%20cy='394'%20r='1.3'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='32'%20cy='367'%20r='1'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='50'%20cy='325'%20r='0.8'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='46'%20cy='40'%20r='0.8'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='26'%20cy='35'%20r='1.3'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='36'%20cy='138'%20r='1.3'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='45'%20cy='147'%20r='1'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='51'%20cy='166'%20r='1.3'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='31'%20cy='491'%20r='1.3'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='34'%20cy='261'%20r='1.3'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='33'%20cy='485'%20r='0.8'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='37'%20cy='226'%20r='1'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='35'%20cy='46'%20r='0.8'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='43'%20cy='287'%20r='1.3'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Cpath%20d='M21,0%20L21,47%20L27,47%20L27,83%20L23,83%20L23,128%20L29,128%20L29,167%20L26,167%20L26,201%20L29,201%20L29,223%20L22,223%20L22,255%20L29,255%20L29,298%20L22,298%20L22,318%20L19,318%20L19,339%20L15,339%20L15,378%20L7,378%20L7,412%20L13,412%20L13,450%20L7,450%20L7,477%20L13,477%20L13,490%20L7,490%20L7,506%20L21,506%20L21,520'%20fill='none'%20stroke='%235b4129'%20stroke-opacity='.5'%20stroke-width='1.4'%20stroke-linejoin='round'/%3E%3Cellipse%20cx='31'%20cy='46'%20rx='5.2'%20ry='2.6'%20fill='%235f8f4a'%20fill-opacity='.9'/%3E%3Cellipse%20cx='33'%20cy='44.6'%20rx='3'%20ry='1.6'%20fill='%237bab5c'%20fill-opacity='.9'/%3E%3Cellipse%20cx='30'%20cy='166'%20rx='5.2'%20ry='2.6'%20fill='%235f8f4a'%20fill-opacity='.9'/%3E%3Cellipse%20cx='32'%20cy='164.6'%20rx='3'%20ry='1.6'%20fill='%237bab5c'%20fill-opacity='.9'/%3E%3Cellipse%20cx='33'%20cy='254'%20rx='5.2'%20ry='2.6'%20fill='%235f8f4a'%20fill-opacity='.9'/%3E%3Cellipse%20cx='35'%20cy='252.6'%20rx='3'%20ry='1.6'%20fill='%237bab5c'%20fill-opacity='.9'/%3E%3Cellipse%20cx='19'%20cy='338'%20rx='5.2'%20ry='2.6'%20fill='%235f8f4a'%20fill-opacity='.9'/%3E%3Cellipse%20cx='21'%20cy='336.6'%20rx='3'%20ry='1.6'%20fill='%237bab5c'%20fill-opacity='.9'/%3E%3Cellipse%20cx='11'%20cy='449'%20rx='5.2'%20ry='2.6'%20fill='%235f8f4a'%20fill-opacity='.9'/%3E%3Cellipse%20cx='13'%20cy='447.6'%20rx='3'%20ry='1.6'%20fill='%237bab5c'%20fill-opacity='.9'/%3E%3C/svg%3E");
-  background-repeat:repeat-y;background-size:100% auto;background-position:right top;
-  filter:drop-shadow(-3px 0 6px rgba(11,46,69,.22));
-}
-body:has(#lgBox)::after{display:none}
-
 /* ---------- B) PILIHAN AKUN: satu baris, huruf kecil, bisa dicari ---------- */
 .pk-btn{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:44px;padding:10px 12px;border:1px solid #c8d4de;border-radius:9px;background:#fff;color:var(--text);font-size:14px;text-align:left;cursor:pointer}
 .pk-btn:focus-visible{outline:2px solid var(--lagoon);outline-offset:1px;border-color:var(--lagoon)}
@@ -2057,6 +2051,23 @@ body:has(#lgBox)::after{display:none}
 .pr-main,.pr-sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;word-break:normal}
 .pr-main{font-size:13.5px}
 @media(max-width:760px){.pr-main{font-size:12px;letter-spacing:-.1px}.pr-sub{font-size:11px}}
+</style>
+
+<script>
+// TAMBAHAN BARU: penanda build tampilan, untuk memastikan HP & PC memuat file yang sama
+(function(){var v=document.getElementById('version');if(!v||!v.parentNode||document.getElementById('buildTag'))return;
+var t=document.createElement('span');t.id='buildTag';t.className='userlabel';t.textContent='UI 22/11-c';v.parentNode.insertAdjacentElement('afterend',t);})();
+</script>
+
+<style id="headerHP">
+/* TAMBAHAN BARU: judul header tidak terpotong di HP */
+@media(max-width:760px){
+  .topbar{flex-wrap:wrap;row-gap:3px;align-content:center}
+  .tb-left{flex:1 1 100%}
+  .tb-eyebrow{white-space:nowrap}
+  .topbar h2{white-space:normal;overflow:visible;text-overflow:clip}
+  .tb-right{flex:1 1 100%;flex-wrap:wrap;gap:2px 10px;padding-left:48px}
+}
 </style>
 
 </body>
