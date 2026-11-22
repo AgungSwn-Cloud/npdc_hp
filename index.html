@@ -20,11 +20,14 @@
     * { box-sizing: border-box; }
     html, body { margin: 0; height: 100%; background: var(--gelap); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
     body { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+    iframe { position: fixed; top: env(safe-area-inset-top); left: 0; right: 0; bottom: env(safe-area-inset-bottom);
+             width: 100%; height: calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom)); border: 0; background: #fff; }
 
     #loading, #offline {
       position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 16px; color: #fff; text-align: center; padding: 24px;
       background: linear-gradient(180deg, #0ea5be, var(--gelap));
+      transition: opacity .4s;
     }
     #loading img, #offline img { width: 96px; height: 96px; border-radius: 22px; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
     .spin { width: 32px; height: 32px; border: 3px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; animation: s 0.9s linear infinite; }
@@ -42,7 +45,7 @@
     <img src="icon-192.png" alt="Logo">
     <div style="font-weight:700;font-size:18px">Nusa Penida Dive Center</div>
     <div class="spin"></div>
-    <div id="fallback">Lama memuat? <a id="tab" href="#">Buka aplikasi</a></div>
+    <div id="fallback">Lama memuat? <a id="tab" href="#" target="_blank" rel="noopener">Buka di tab baru</a></div>
   </div>
 
   <div id="offline">
@@ -52,21 +55,29 @@
     <button class="btn" onclick="location.reload()">Coba lagi</button>
   </div>
 
+  <iframe id="app" title="Akuntansi Nusa Penida Dive Center"
+          allow="clipboard-read; clipboard-write; fullscreen; camera; microphone; geolocation"></iframe>
+
   <script>
     // === GANTI DI SINI jika URL deployment Apps Script berubah ===
     var APP_URL = "https://script.google.com/macros/s/AKfycbxAx53J3J8X4qf50BR1uAnAjLote7avq9rK6uzaZgS8LnAL5V0maQm7ml3Mpf8F3VGlSA/exec";
 
+    var frame = document.getElementById('app');
+    var loading = document.getElementById('loading');
     var offline = document.getElementById('offline');
     document.getElementById('tab').href = APP_URL;
 
-    // Aplikasi dibuka langsung (bukan di dalam bingkai) supaya login dan penyimpanan sesi
-    // berjalan normal di HP.
     function mulai() {
       if (!navigator.onLine) { offline.style.display = 'flex'; return; }
       offline.style.display = 'none';
-      setTimeout(function () { document.getElementById('fallback').style.display = 'block'; }, 6000);
-      location.replace(APP_URL);
+      frame.src = APP_URL;
+      setTimeout(function () { document.getElementById('fallback').style.display = 'block'; }, 8000);
     }
+
+    frame.addEventListener('load', function () {
+      loading.style.opacity = 0;
+      setTimeout(function () { loading.style.display = 'none'; }, 400);
+    });
 
     window.addEventListener('online', function () { location.reload(); });
     window.addEventListener('offline', function () { offline.style.display = 'flex'; });
