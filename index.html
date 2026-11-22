@@ -4,7 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b2e45">
+<meta name="description" content="Aplikasi akuntansi Nusa Penida Dive Center">
 <title>Nusa Penida Dive Center - Akuntansi</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Akuntansi DC">
+<style>html,body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent}</style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -613,12 +622,18 @@ const state={hariIni:todayLocal(),tglAwal:'',form:null,jPage:1,bb:null,bbShown:0
 let busyCount=0,noticeTimer=null;
 function busy(on){busyCount=Math.max(0,busyCount+(on?1:-1));$('busy').classList.toggle('on',busyCount>0);}
 function notice(msg,err){const n=$('notice');n.textContent=msg;n.className='notice '+(err?'err':'ok');clearTimeout(noticeTimer);noticeTimer=setTimeout(()=>{n.className='notice';},6000);}
+/* === GANTI DI SINI jika URL deployment Apps Script berubah === */
+const APP_URL='https://script.google.com/macros/s/AKfycbxAx53J3J8X4qf50BR1uAnAjLote7avq9rK6uzaZgS8LnAL5V0maQm7ml3Mpf8F3VGlSA/exec';
+/* Kirim satu permintaan ke Apps Script (doPost). Content-Type text/plain agar tidak memicu preflight CORS. */
+function panggil(body){
+  return fetch(APP_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body),redirect:'follow'})
+    .then(r=>{if(!r.ok)throw new Error('Server tidak merespons ('+r.status+').');return r.json();})
+    .then(j=>{if(!j||!j.ok)throw new Error((j&&j.error)||'Permintaan gagal.');return j.data;})
+    .catch(e=>{if(e instanceof TypeError)throw new Error('Tidak bisa terhubung ke server. Periksa koneksi internet.');throw e;});
+}
 function rpc(fn,args,ok,fail){
   busy(true);
-  google.script.run
-    .withSuccessHandler(r=>{busy(false);if(ok)ok(r);})
-    .withFailureHandler(e=>{busy(false);const hs=!!(e&&/SESI_HABIS/.test(e.message||''));if(hs&&window.sesiHabis)window.sesiHabis();if(fail)fail(e);else if(!hs)notice((e&&e.message)||String(e),true);})
-    .api(window.SESI_TOKEN||'',fn,args||[]);
+  panggil({fn:'api',token:window.SESI_TOKEN||'',f:fn,args:args||[]}).then(r=>{busy(false);if(ok)ok(r);},e=>{busy(false);const hs=!!(e&&/SESI_HABIS/.test(e.message||''));if(hs&&window.sesiHabis)window.sesiHabis();if(fail)fail(e);else if(!hs)notice((e&&e.message)||String(e),true);});
 }
 
 /* ============ Navigasi ============ */
@@ -1454,20 +1469,16 @@ function kirimLogin(ev){
   const b=$('lgBtn');
   b.disabled=true;b.textContent='Memeriksa...';$('lgPesan').textContent='';
   busy(true);
-  google.script.run
-    .withSuccessHandler(r=>{
+  panggil({fn:'login',args:[$('lgEmail').value,$('lgSandi').value]}).then(r=>{
       busy(false);b.disabled=false;b.textContent='Masuk';
       $('lgSandi').value='';
-      const ok=simpanTok(r.token);
-      /* diubah: tidak reload (reload di iframe Apps Script bisa jadi blank putih di iPhone) */
+      simpanTok(r.token);
       A.peran=r.peran;A.email=r.email;A.nama=r.nama;terapkan();
       $('lgBox').remove();state.form=null;showPage('dashboard');
-    })
-    .withFailureHandler(e=>{
+    },e=>{
       busy(false);b.disabled=false;b.textContent='Masuk';
       $('lgPesan').textContent=String((e&&e.message)||'Gagal masuk.').replace(/^Error:\s*/,'');
-    })
-    .login($('lgEmail').value,$('lgSandi').value);
+    });
 }
 function keluar(){
   const selesai=()=>{hapusTok();A.peran='';state.form=null;state.masters={};tampilLogin('');};
@@ -2070,5 +2081,10 @@ var t=document.createElement('span');t.id='buildTag';t.className='userlabel';t.t
 }
 </style>
 
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(e){console.warn('SW gagal:',e);});});
+}
+</script>
 </body>
 </html>
