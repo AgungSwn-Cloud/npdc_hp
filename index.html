@@ -293,14 +293,6 @@ summary.filtersum{cursor:pointer;font-weight:700;color:var(--lagoon);padding:4px
 }
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
-<link rel="manifest" href="manifest.json">
-<link rel="icon" type="image/png" href="icon-192.png">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Akuntansi DC">
-<script src="gas-shim.js"></script>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><symbol id="appicon" viewBox="0 0 512 512"><defs><linearGradient id="gBg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#10425F"/><stop offset="1" stop-color="#07202F"/></linearGradient><linearGradient id="gTank" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#63CCFF"/><stop offset=".55" stop-color="#1E9BFF"/><stop offset="1" stop-color="#0B73E0"/></linearGradient>
@@ -1574,11 +1566,498 @@ document.addEventListener('DOMContentLoaded',muatAkses);
 })();
 </script>
 <script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js').catch(function (e) { console.warn('SW gagal:', e); });
-  });
-}
+// ===== TAMBAHAN BARU: USERNAME untuk login & menu Pengguna (kode lama tidak diubah) =====
+(function () {
+  'use strict';
+
+  // 1) Layar login: kolom "Email" menerima Email ATAU Username
+  function patchLogin() {
+    var inp = document.getElementById('lgEmail');
+    if (!inp || inp.getAttribute('data-un')) return;
+    inp.setAttribute('data-un', '1');
+    inp.type = 'text';
+    inp.placeholder = 'Email atau username';
+    inp.setAttribute('autocapitalize', 'none'); inp.setAttribute('autocorrect', 'off'); inp.setAttribute('spellcheck', 'false');
+    var lb = document.querySelector('label[for="lgEmail"]'); if (lb) lb.textContent = 'Email atau Username';
+  }
+  patchLogin();
+  new MutationObserver(patchLogin).observe(document.body, { childList: true, subtree: true });
+
+  // 2) Menu Pengguna
+  if (typeof MASTER === 'undefined' || !document.getElementById('userEmail')) return;
+
+  if (!document.getElementById('userUsername')) {
+    var kotakEmail = document.getElementById('userEmail').closest('.field');
+    if (kotakEmail) kotakEmail.insertAdjacentHTML('beforebegin',
+      '<div class="field"><label for="userUsername">Username (boleh dikosongkan)</label>' +
+      '<input id="userUsername" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="30" placeholder="contoh: budi.admin" ' +
+      'pattern="[A-Za-z0-9._\\-]{3,30}" title="3-30 karakter: huruf, angka, titik, garis bawah, atau strip. Tanpa spasi."></div>');
+  }
+  var sub = document.querySelector('#page-user .subtitle');
+  if (sub) sub.textContent = 'Akun yang boleh masuk ke aplikasi: email, username (opsional), sandi, dan perannya (Operator, Pemilik, Admin).';
+
+  var tbody = document.getElementById('userTable');
+  var tabel = tbody && tbody.closest('table');
+  var thNama = tabel && tabel.querySelector('thead th');
+  if (thNama && !tabel.querySelector('.th-username')) thNama.insertAdjacentHTML('afterend', '<th class="th-username">Username</th>');
+
+  MASTER.user.cols = 6;
+  MASTER.user.row = function (r, act) {
+    return '<td data-label="Nama">' + esc(r.Nama) + '</td><td data-label="Username">' + esc(r.Username) + '</td><td data-label="Email">' + esc(r.Email) +
+      '</td><td data-label="Peran">' + esc(r.Peran) + '</td><td data-label="Status">' + esc(r.Status) + '</td>' + act;
+  };
+
+  var asliClear = window.clearMaster, asliEdit = window.editMaster, asliSave = window.saveMaster;
+  window.clearMaster = function (t) {
+    asliClear(t);
+    if (t === 'user') { var u = document.getElementById('userUsername'); if (u) u.value = ''; }
+  };
+  window.editMaster = function (t, i) {
+    asliEdit(t, i);
+    if (t === 'user') { var u = document.getElementById('userUsername'); if (u) u.value = ((state.masters.user || [])[i] || {}).Username || ''; }
+  };
+  window.saveMaster = function (e, t) {
+    if (t !== 'user') return asliSave(e, t);
+    e.preventDefault();
+    var d = {
+      ID_Pengguna: $('userId').value, Nama: $('userNama').value, Username: $('userUsername').value,
+      Email: $('userEmail').value, Peran: $('userPeran').value, Status: $('userStatus').value, Sandi: $('userSandi').value
+    };
+    rpc(MASTER.user.save, [d], function (r) { notice(r.message); window.clearMaster('user'); state.form = null; loadMaster('user'); });
+  };
+})();
 </script>
+
+<style>
+/* TAMBAHAN BARU: tombol mata (lihat/sembunyikan sandi) */
+.pwwrap{position:relative;display:block}
+.pwwrap>input{padding-right:48px}
+.pwmata{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:40px;height:36px;display:flex;align-items:center;justify-content:center;border:0;background:transparent;color:#5b7083;cursor:pointer;border-radius:8px;padding:0}
+.pwmata:hover{color:#0f172a;background:rgba(15,23,42,.06)}
+.pwmata:focus-visible{outline:2px solid #2563eb;outline-offset:1px}
+.pwmata svg{width:20px;height:20px;display:block;pointer-events:none}
+</style>
+<script>
+// ===== TAMBAHAN BARU: tombol mata pada semua isian sandi (kode lama tidak diubah) =====
+(function () {
+  'use strict';
+  var IKON_LIHAT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+  var IKON_TUTUP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+
+  function pasang(inp) {
+    if (inp.getAttribute('data-mata')) return;
+    inp.setAttribute('data-mata', '1');
+    var wrap = document.createElement('span');
+    wrap.className = 'pwwrap';
+    inp.parentNode.insertBefore(wrap, inp);
+    wrap.appendChild(inp);
+    var tb = document.createElement('button');
+    tb.type = 'button';
+    tb.className = 'pwmata';
+    tb.tabIndex = -1;
+    tb.title = 'Tampilkan sandi';
+    tb.setAttribute('aria-label', 'Tampilkan sandi');
+    tb.innerHTML = IKON_LIHAT;
+    tb.addEventListener('mousedown', function (e) { e.preventDefault(); });   // fokus tetap di isian
+    tb.addEventListener('click', function () {
+      var tampak = inp.type === 'text';
+      inp.type = tampak ? 'password' : 'text';
+      tb.innerHTML = tampak ? IKON_LIHAT : IKON_TUTUP;
+      tb.title = tampak ? 'Tampilkan sandi' : 'Sembunyikan sandi';
+      tb.setAttribute('aria-label', tb.title);
+      try { inp.focus(); } catch (e) {}
+    });
+    wrap.appendChild(tb);
+  }
+  function pasangSemua() {
+    var l = document.querySelectorAll('input[type="password"]:not([data-mata])');
+    for (var i = 0; i < l.length; i++) pasang(l[i]);
+  }
+  pasangSemua();
+  new MutationObserver(pasangSemua).observe(document.body, { childList: true, subtree: true });
+})();
+</script>
+
+<!-- ===================================================================== -->
+<!-- TAMBAHAN BARU: PERBAIKAN TAMPILAN (font Poppins, sidebar, dashboard)   -->
+<!-- Hanya tambahan di akhir halaman; kode lama tidak diubah.                -->
+<!-- ===================================================================== -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&amp;display=swap">
+<style id="tampilanBaru">
+/* ---------- 1) FONT: semua Poppins ---------- */
+:root{--font:'Poppins',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif}
+html,body,button,input,select,textarea,table,th,td{font-family:var(--font)}
+@media(min-width:761px){
+  body{font-size:14px}
+  table{font-size:12.5px}
+  .heading{font-size:22px;font-weight:700}
+  .subtitle{font-size:13px}
+  .btn{font-size:13px}
+  input,select,textarea{font-size:14px}
+  .chip{font-size:12.5px}
+}
+.heading,.panel h3,.topbar h2,.brand{letter-spacing:-.1px}
+
+/* ---------- 2) SIDEBAR ---------- */
+.sidebar{
+  width:268px;padding:20px 14px 24px;
+  background:linear-gradient(180deg,#0b2e45 0%,#082638 100%);
+  border-right:1px solid rgba(255,255,255,.06);
+  scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.22) transparent;
+}
+.sidebar::-webkit-scrollbar{width:6px}
+.sidebar::-webkit-scrollbar-thumb{background:rgba(255,255,255,.22);border-radius:6px}
+.sidebar .brand{
+  padding:4px 8px 18px;margin:0 0 6px;gap:12px;
+  border-bottom:1px solid rgba(255,255,255,.10);
+  font-size:13.5px;font-weight:700;letter-spacing:.6px;line-height:1.3;white-space:normal;
+}
+.sidebar .brand small{font-size:11px;font-weight:400;letter-spacing:.2px;color:#9fc0d2;margin-top:3px}
+.sidebar .navgroup{
+  display:flex;align-items:center;gap:10px;
+  padding:20px 10px 8px;margin:0;
+  font-size:10.5px;font-weight:600;letter-spacing:1.3px;color:#7fa7bd;
+}
+.sidebar .navgroup::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.10)}
+.sidebar .navbtn{
+  display:flex;align-items:center;gap:12px;
+  width:100%;margin:3px 0;padding:10px 12px;
+  border-radius:12px;
+  font-size:13.5px;font-weight:500;line-height:1.35;color:#cfe0ea;
+  text-align:left;white-space:normal;overflow-wrap:anywhere;
+  position:relative;transition:background .15s,color .15s,transform .15s;
+}
+.sidebar .navbtn::before{
+  content:'';flex:0 0 20px;width:20px;height:20px;
+  background:currentColor;opacity:.85;
+  -webkit-mask:var(--ic) center/contain no-repeat;mask:var(--ic) center/contain no-repeat;
+}
+.sidebar .navbtn:hover{background:rgba(255,255,255,.07);color:#fff}
+.sidebar .navbtn:hover::before{opacity:1}
+.sidebar .navbtn.active{
+  color:#fff;font-weight:600;
+  background:linear-gradient(90deg,#0e7490 0%,#0b6a85 100%);
+  box-shadow:0 6px 16px rgba(14,116,144,.38);
+}
+.sidebar .navbtn.active::before{opacity:1}
+.sidebar .navbtn.active::after{
+  content:'';position:absolute;left:-14px;top:9px;bottom:9px;width:4px;border-radius:0 4px 4px 0;background:#7dd3fc;
+}
+.sidebar .navbtn:focus-visible{outline:2px solid #7dd3fc;outline-offset:1px}
+@media(max-width:980px){.sidebar{width:232px;padding:18px 12px}}
+@media(min-width:761px) and (max-width:980px){.sidebar .navbtn{font-size:13px}}
+.navbtn[data-page=dashboard]{--ic:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='3'%20y='3'%20width='7'%20height='9'%20rx='1.5'/%3E%3Crect%20x='14'%20y='3'%20width='7'%20height='5'%20rx='1.5'/%3E%3Crect%20x='14'%20y='12'%20width='7'%20height='9'%20rx='1.5'/%3E%3Crect%20x='3'%20y='16'%20width='7'%20height='5'%20rx='1.5'/%3E%3C/svg%3E")}
+.navbtn[data-page=input]{--ic:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Ccircle%20cx='12'%20cy='12'%20r='9'/%3E%3Cpath%20d='M12%208v8M8%2012h8'/%3E%3C/svg%3E")}
+.navbtn[data-page=jurnal]{--ic:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M14%203H7a2%202%200%200%200-2%202v14a2%202%200%200%200%202%202h10a2%202%200%200%200%202-2V8z'/%3E%3Cpath%20d='M14%203v5h5M9%2013h6M9%2017h6'/%3E%3C/svg%3E")}
+.navbtn[data-page=bukubesar]{--ic:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M4%2019.5A2.5%202.5%200%200%201%206.5%2017H20V3H6.5A2.5%202.5%200%200%200%204%205.5z'/%3E%3Cpath%20d='M4%2019.5A2.5%202.5%200%200%200%206.5%2022H20v-5'/%3E%3C/svg%3E")}
+.navbtn[data-page=posting]{--ic:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M9%2011l3%203%208-8'/%3E%3Cpath%20d='M20%2012v7a2%202%200%200%201-2%202H6a2%202%200%200%201-2-2V6a2%202%200%200%201%202-2h9'/%3E%3C/svg%3E")}
+.navbtn[data-page=labarugi]{--ic:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M3%2017l6-6%204%204%208-8'/%3E%3Cpath%20d='M15%207h6v6'/%3E%3C/svg%3E")}
+.navbtn[data-page=neraca]{--ic:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M12%203v18M5%207h14'/%3E%3Cpath%20d='M5%207l-3%207a3%203%200%200%200%206%200zM19%207l-3%207a3%203%200%200%200%206%200z'/%3E%3C/svg%3E")}
+.navbtn[data-page=komparasi]{--ic:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M5%2021V10M12%2021V4M19%2021v-7'/%3E%3C/svg%3E")}
+.navbtn[data-page=opname]{--ic:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='2'%20y='6'%20width='20'%20height='13'%20rx='2'/%3E%3Cpath%20d='M2%2010h20M16%2014.5h2'/%3E%3C/svg%3E")}
+.navbtn[data-page=akun]{--ic:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M4%209h16M4%2015h16M10%203L8%2021M16%203l-2%2018'/%3E%3C/svg%3E")}
+.navbtn[data-page=operator]{--ic:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Ccircle%20cx='12'%20cy='8'%20r='4'/%3E%3Cpath%20d='M4%2021c0-4%204-6%208-6s8%202%208%206'/%3E%3C/svg%3E")}
+.navbtn[data-page=user]{--ic:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Ccircle%20cx='9'%20cy='8'%20r='3.5'/%3E%3Cpath%20d='M2%2020c0-3.5%203-5.5%207-5.5s7%202%207%205.5M17%204.5a3.5%203.5%200%200%201%200%207M22%2020c0-2.5-1.5-4.2-4-5'/%3E%3C/svg%3E")}
+.navbtn[data-page=profil]{--ic:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='3'%20y='7'%20width='18'%20height='13'%20rx='2'/%3E%3Cpath%20d='M8%207V5a2%202%200%200%201%202-2h4a2%202%200%200%201%202%202v2M3%2013h18'/%3E%3C/svg%3E")}
+.navbtn[data-page=sistem]{--ic:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Ccircle%20cx='12'%20cy='12'%20r='9'/%3E%3Cpath%20d='M12%2011v6M12%207.5v.5'/%3E%3C/svg%3E")}
+/* ---------- 3) DASHBOARD MODERN ---------- */
+.dh>.heading{display:none}
+.dh-hero{
+  position:relative;overflow:hidden;border-radius:22px;padding:22px 24px 18px;margin-bottom:18px;color:#fff;
+  background:
+    radial-gradient(circle at 90% 8%,rgba(125,225,255,.38),rgba(125,225,255,0) 46%),
+    radial-gradient(circle at 6% 120%,rgba(255,255,255,.14),rgba(255,255,255,0) 52%),
+    linear-gradient(120deg,#0a3a56 0%,#0c5a78 55%,#0e8aa6 100%);
+  box-shadow:0 14px 34px rgba(11,46,69,.22);
+}
+.dh-hero::before,.dh-hero::after{content:'';position:absolute;border-radius:50%;border:2px solid rgba(255,255,255,.16);pointer-events:none}
+.dh-hero::before{width:130px;height:130px;right:-34px;bottom:-56px}
+.dh-hero::after{width:58px;height:58px;right:96px;top:-24px}
+.dh-top{position:relative;z-index:1;display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.dh-hi{font-size:13px;font-weight:500;color:#bfeaf8}
+.dh-title{margin:2px 0 0;font-size:24px;font-weight:700;line-height:1.25;color:#fff}
+.dh-bln{flex-shrink:0;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:999px;padding:6px 14px;font-size:12.5px;font-weight:600;white-space:nowrap}
+.dh-sub{position:relative;z-index:1;margin-top:6px}
+.dh-sub .subtitle{margin:0;color:rgba(255,255,255,.85);font-size:13px}
+.dh-strip{position:relative;z-index:1;margin-top:14px}
+.dh-strip .strip{margin:0;gap:8px}
+.dh-hero .badge{background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.26);font-weight:500;font-size:12px}
+.dh-hero .badge.ok{background:rgba(74,222,128,.22);border-color:rgba(134,239,172,.55);color:#dcfce7}
+.dh-hero .badge.bad{background:rgba(248,113,113,.30);border-color:rgba(252,165,165,.65);color:#fee2e2}
+
+#page-dashboard .cards{gap:16px;margin-bottom:18px}
+#page-dashboard .card{
+  display:grid;grid-template-columns:46px minmax(0,1fr);column-gap:14px;align-items:center;
+  padding:16px;border:0;border-radius:18px;background:#fff;
+  box-shadow:0 2px 6px rgba(11,46,69,.05),0 12px 28px rgba(11,46,69,.07);
+}
+.dk-ico{grid-row:1/3;width:46px;height:46px;border-radius:14px;display:grid;place-items:center}
+.dk-ico svg{width:22px;height:22px}
+.dk-p{background:#dcfce7;color:#15803d}
+.dk-b{background:#ffedd5;color:#c2410c}
+.dk-l{background:#dbeafe;color:#1d4ed8}
+.dk-k{background:#cffafe;color:#0e7490}
+#page-dashboard .card .label{grid-column:2;font-size:12px;font-weight:500;color:var(--muted);line-height:1.3}
+#page-dashboard .card .value{grid-column:2;margin-top:2px;font-size:clamp(15px,1.55vw,19px);font-weight:700;letter-spacing:-.2px;line-height:1.25}
+
+.dh-comp,.dh-recent{border:0;border-radius:18px;padding:16px 18px;box-shadow:0 2px 6px rgba(11,46,69,.05),0 12px 28px rgba(11,46,69,.07)}
+.dh-comp-h{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}
+.dh-comp-h h3{margin:0;font-size:14px;font-weight:600}
+.dh-marg{font-size:12px;font-weight:600;padding:4px 12px;border-radius:999px;background:#e0f2fe;color:#075985}
+.dh-bar{display:flex;height:14px;border-radius:999px;overflow:hidden;background:#e8eef3}
+.dh-bar span{display:block;height:100%;width:0;transition:width .7s ease}
+.dh-bp{background:linear-gradient(90deg,#22c55e,#16a34a)}
+.dh-bb{background:linear-gradient(90deg,#fb923c,#ea580c)}
+.dh-leg{display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:10px;font-size:12.5px;color:var(--muted)}
+.dh-leg .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
+.dh-leg .dot.p{background:#16a34a}.dh-leg .dot.b{background:#ea580c}
+.dh-leg b{color:var(--text);font-weight:600}
+.dh-recent h3{display:flex;align-items:center;gap:10px;margin:0 0 10px;font-size:14px;font-weight:600}
+.dh-recent h3::after{content:'Terbaru';font-size:11px;font-weight:600;padding:2px 10px;border-radius:999px;background:#e0f2fe;color:#075985}
+.dh-recent th{background:transparent;color:#7a8da0;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--line)}
+.dh-recent td{border-bottom:1px solid #eef3f6}
+.dh-recent tbody tr:hover td{background:#f7fbfd}
+body.r-admin .dh-comp{display:none}
+
+@media(max-width:760px){
+  .dh-hero{border-radius:18px;padding:16px 16px 14px;margin-bottom:12px}
+  .dh-title{font-size:19px}
+  .dh-bln{padding:5px 11px;font-size:11.5px}
+  #page-dashboard .cards{gap:10px;margin-bottom:12px}
+  #page-dashboard .card{grid-template-columns:36px minmax(0,1fr);column-gap:10px;padding:12px;border-radius:16px}
+  .dk-ico{width:36px;height:36px;border-radius:11px}
+  .dk-ico svg{width:18px;height:18px}
+  #page-dashboard .card .value{font-size:14.5px}
+  .dh-comp,.dh-recent{border-radius:16px;padding:12px 14px}
+}
+</style>
+<script>
+// ===== TAMBAHAN BARU: susunan dashboard modern (id & fungsi lama tetap dipakai) =====
+(function () {
+  'use strict';
+  var sec = document.getElementById('page-dashboard');
+  if (!sec || sec.getAttribute('data-dh')) return;
+  var h1 = sec.querySelector('.heading'), sub = document.getElementById('dashSub'), strip = document.getElementById('dashStrip');
+  var cards = sec.querySelector('.cards'), recent = document.getElementById('dashRecent');
+  if (!h1 || !sub || !strip || !cards) return;
+  sec.setAttribute('data-dh', '1'); sec.classList.add('dh');
+
+  var jam = new Date().getHours();
+  var sapa = jam >= 4 && jam < 11 ? 'Selamat pagi' : jam < 15 ? 'Selamat siang' : jam < 18 ? 'Selamat sore' : 'Selamat malam';
+  var bulan = new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+
+  // Hero: sapaan + judul + info usaha/tanggal + lencana status (elemen lama dipindah, id tetap)
+  var hero = document.createElement('div');
+  hero.className = 'dh-hero';
+  hero.innerHTML = '<div class="dh-top"><div><div class="dh-hi">' + sapa + '</div><h1 class="dh-title">Ringkasan Bulan Ini</h1></div><div class="dh-bln">' + bulan + '</div></div><div class="dh-sub"></div><div class="dh-strip"></div>';
+  sec.insertBefore(hero, h1);
+  hero.querySelector('.dh-sub').appendChild(sub);
+  hero.querySelector('.dh-strip').appendChild(strip);
+
+  // Ikon pada empat kartu
+  var S = function (p) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>'; };
+  var ikon = [
+    ['dk-p', S('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>')],
+    ['dk-b', S('<path d="M3 7l6 6 4-4 8 8"/><path d="M15 17h6v-6"/>')],
+    ['dk-l', S('<path d="M5 21V10M12 21V4M19 21v-7"/>')],
+    ['dk-k', S('<rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20M16 14.5h2"/>')]
+  ];
+  var kartu = cards.querySelectorAll('.card');
+  for (var i = 0; i < kartu.length && i < ikon.length; i++) {
+    kartu[i].insertAdjacentHTML('afterbegin', '<span class="dk-ico ' + ikon[i][0] + '">' + ikon[i][1] + '</span>');
+  }
+
+  // Komposisi Pendapatan vs Beban
+  var comp = document.createElement('div');
+  comp.className = 'panel dh-comp';
+  comp.innerHTML = '<div class="dh-comp-h"><h3>Pendapatan vs Beban</h3><span class="dh-marg" id="dhMarg">-</span></div>' +
+    '<div class="dh-bar"><span class="dh-bp" id="dhBp"></span><span class="dh-bb" id="dhBb"></span></div>' +
+    '<div class="dh-leg"><span><i class="dot p"></i>Pendapatan <b id="dhPp">0%</b></span><span><i class="dot b"></i>Beban <b id="dhBpp">0%</b></span></div>';
+  cards.insertAdjacentElement('afterend', comp);
+
+  function angka(id) {
+    var el = document.getElementById(id), t = el ? String(el.textContent || '').trim() : '';
+    var n = parseInt(t.replace(/[^\d]/g, ''), 10) || 0;
+    return t.charAt(0) === '-' ? -n : n;
+  }
+  function hitung() {
+    var p = Math.max(0, angka('kPend')), b = Math.max(0, angka('kBeban')), tot = p + b;
+    var pp = tot ? Math.round(p / tot * 100) : 0, bp = tot ? 100 - pp : 0;
+    document.getElementById('dhBp').style.width = pp + '%';
+    document.getElementById('dhBb').style.width = bp + '%';
+    document.getElementById('dhPp').textContent = pp + '%';
+    document.getElementById('dhBpp').textContent = bp + '%';
+    document.getElementById('dhMarg').textContent = p > 0 ? 'Margin laba ' + ((p - b) / p * 100).toFixed(1).replace('.', ',') + '%' : (tot ? 'Belum ada pendapatan' : 'Belum ada transaksi');
+  }
+  hitung();
+  var mo = new MutationObserver(hitung);
+  ['kPend', 'kBeban'].forEach(function (id) { var el = document.getElementById(id); if (el) mo.observe(el, { childList: true, characterData: true, subtree: true }); });
+
+  // Panel "Jurnal terbaru"
+  var pr = recent && recent.closest('.panel');
+  if (pr) pr.classList.add('dh-recent');
+})();
+</script>
+
+<style id="ombakHeader">
+/* TAMBAHAN BARU: gelombang laut di batas bawah header (3 lapis, bergerak pelan) */
+.tb-wave{display:none}
+.topbar{min-height:96px;padding-bottom:34px}
+.ombak{position:absolute;left:0;right:0;bottom:-1px;height:40px;overflow:hidden;pointer-events:none;z-index:0}
+.ombak .ob{position:absolute;left:0;bottom:0;width:200%;height:100%;display:block;will-change:transform}
+.ombak .ob1{animation:ombakGeser 26s linear infinite}
+.ombak .ob2{animation:ombakGeser 18s linear infinite reverse}
+.ombak .ob3{animation:ombakGeser 12s linear infinite}
+@keyframes ombakGeser{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@media(max-width:760px){
+  .topbar{min-height:78px;padding-bottom:28px}
+  .ombak{height:30px}
+}
+</style>
+<script>
+// ===== TAMBAHAN BARU: gelombang laut di header (kode lama tidak diubah) =====
+(function () {
+  'use strict';
+  var tb = document.querySelector('.topbar');
+  if (!tb || tb.querySelector('.ombak')) return;
+  var w = document.createElement('div');
+  w.className = 'ombak';
+  w.setAttribute('aria-hidden', 'true');
+  w.innerHTML = '<svg class="ob ob1" viewBox="0 0 2880 40" preserveAspectRatio="none"><path d="M-720,13 Q-540.0,2.0 -360.0,13 T0.0,13 T360.0,13 T720.0,13 T1080.0,13 T1440.0,13 T1800.0,13 T2160.0,13 T2520.0,13 T2880.0,13 T3240.0,13 T3600.0,13 L3600.0,40 L-720.0,40 Z" fill="#38bdf8" fill-opacity="0.3"/><path d="M-720,13 Q-540.0,2.0 -360.0,13 T0.0,13 T360.0,13 T720.0,13 T1080.0,13 T1440.0,13 T1800.0,13 T2160.0,13 T2520.0,13 T2880.0,13 T3240.0,13 T3600.0,13" fill="none" stroke="#bae6fd" stroke-opacity="0.55" stroke-width="1" vector-effect="non-scaling-stroke"/></svg><svg class="ob ob2" viewBox="0 0 2880 40" preserveAspectRatio="none"><path d="M-360,19 Q-240.0,9 -120.0,19 T120.0,19 T360.0,19 T600.0,19 T840.0,19 T1080.0,19 T1320.0,19 T1560.0,19 T1800.0,19 T2040.0,19 T2280.0,19 T2520.0,19 T2760.0,19 T3000.0,19 T3240.0,19 T3480.0,19 L3480.0,40 L-360.0,40 Z" fill="#7dd3fc" fill-opacity="0.55"/><path d="M-360,19 Q-240.0,9 -120.0,19 T120.0,19 T360.0,19 T600.0,19 T840.0,19 T1080.0,19 T1320.0,19 T1560.0,19 T1800.0,19 T2040.0,19 T2280.0,19 T2520.0,19 T2760.0,19 T3000.0,19 T3240.0,19 T3480.0,19" fill="none" stroke="#e0f2fe" stroke-opacity="0.75" stroke-width="1.2" vector-effect="non-scaling-stroke"/></svg><svg class="ob ob3" viewBox="0 0 2880 40" preserveAspectRatio="none"><path d="M-300,26 Q-210.0,18 -120.0,26 T60.0,26 T240.0,26 T420.0,26 T600.0,26 T780.0,26 T960.0,26 T1140.0,26 T1320.0,26 T1500.0,26 T1680.0,26 T1860.0,26 T2040.0,26 T2220.0,26 T2400.0,26 T2580.0,26 T2760.0,26 T2940.0,26 T3120.0,26 T3300.0,26 L3300.0,40 L-300.0,40 Z" fill="#eef5f7" fill-opacity="1"/><path d="M-300,26 Q-210.0,18 -120.0,26 T60.0,26 T240.0,26 T420.0,26 T600.0,26 T780.0,26 T960.0,26 T1140.0,26 T1320.0,26 T1500.0,26 T1680.0,26 T1860.0,26 T2040.0,26 T2220.0,26 T2400.0,26 T2580.0,26 T2760.0,26 T2940.0,26 T3120.0,26 T3300.0,26" fill="none" stroke="#ffffff" stroke-opacity="0.95" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>';
+  tb.appendChild(w);
+})();
+</script>
+
+<style id="tebingPicker">
+/* ---------- A) NUANSA TEBING di sisi kanan layar ---------- */
+html{--cliff-w:60px}
+@media(max-width:980px){html{--cliff-w:38px}}
+@media(max-width:760px){html{--cliff-w:20px}}
+body{padding-right:var(--cliff-w)}
+body::after{
+  content:'';position:fixed;top:0;right:0;bottom:0;width:var(--cliff-w);z-index:40;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2056%20520'%20preserveAspectRatio='none'%3E%3Cdefs%3E%3ClinearGradient%20id='g'%20x1='0'%20x2='1'%20y1='0'%20y2='0'%3E%3Cstop%20offset='0'%20stop-color='%23ead8b4'/%3E%3Cstop%20offset='.42'%20stop-color='%23cfab78'/%3E%3Cstop%20offset='1'%20stop-color='%237d5b3d'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath%20d='M21,0%20L21,47%20L27,47%20L27,83%20L23,83%20L23,128%20L29,128%20L29,167%20L26,167%20L26,201%20L29,201%20L29,223%20L22,223%20L22,255%20L29,255%20L29,298%20L22,298%20L22,318%20L19,318%20L19,339%20L15,339%20L15,378%20L7,378%20L7,412%20L13,412%20L13,450%20L7,450%20L7,477%20L13,477%20L13,490%20L7,490%20L7,506%20L21,506%20L21,520%20L56,520%20L56,0%20Z'%20fill='url(%23g)'/%3E%3Cpath%20d='M23,22%20L56,25'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M23,24.2%20L56,26.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M29,56%20L56,58'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M29,58.2%20L56,60.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M25,99%20L56,100'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M25,101.2%20L56,103.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M31,133%20L56,135'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M31,135.2%20L56,137.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M31,166%20L56,169'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M31,168.2%20L56,170.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M31,201%20L56,202'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M31,203.2%20L56,205.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M24,229%20L56,232'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M24,231.2%20L56,233.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M31,258%20L56,260'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M31,260.2%20L56,262.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M31,287%20L56,289'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M31,289.2%20L56,291.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M21,325%20L56,326'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M21,327.2%20L56,329.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M17,351%20L56,354'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M17,353.2%20L56,355.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M17,377%20L56,378'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M17,379.2%20L56,381.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M9,409%20L56,410'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M9,411.2%20L56,413.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M9,450%20L56,452'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M9,452.2%20L56,454.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M15,488%20L56,490'%20stroke='%237e5c3e'%20stroke-opacity='.30'%20stroke-width='1.2'/%3E%3Cpath%20d='M15,490.2%20L56,492.4'%20stroke='%23f7ebcf'%20stroke-opacity='.38'%20stroke-width='.9'/%3E%3Cpath%20d='M44,319%20L44,357'%20stroke='%234e3827'%20stroke-opacity='.24'%20stroke-width='1.4'%20stroke-linecap='round'/%3E%3Cpath%20d='M27,418%20L26,452'%20stroke='%234e3827'%20stroke-opacity='.24'%20stroke-width='1.4'%20stroke-linecap='round'/%3E%3Cpath%20d='M27,391%20L25,417'%20stroke='%234e3827'%20stroke-opacity='.24'%20stroke-width='1.4'%20stroke-linecap='round'/%3E%3Cpath%20d='M49,268%20L48,325'%20stroke='%234e3827'%20stroke-opacity='.24'%20stroke-width='1.4'%20stroke-linecap='round'/%3E%3Cpath%20d='M41,379%20L42,417'%20stroke='%234e3827'%20stroke-opacity='.24'%20stroke-width='1.4'%20stroke-linecap='round'/%3E%3Cpath%20d='M44,244%20L42,294'%20stroke='%234e3827'%20stroke-opacity='.24'%20stroke-width='1.4'%20stroke-linecap='round'/%3E%3Cpath%20d='M37,232%20L35,271'%20stroke='%234e3827'%20stroke-opacity='.24'%20stroke-width='1.4'%20stroke-linecap='round'/%3E%3Cpath%20d='M49,168%20L49,231'%20stroke='%234e3827'%20stroke-opacity='.24'%20stroke-width='1.4'%20stroke-linecap='round'/%3E%3Ccircle%20cx='26'%20cy='37'%20r='0.8'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='33'%20cy='242'%20r='1'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='20'%20cy='411'%20r='1.3'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='41'%20cy='441'%20r='1'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='44'%20cy='53'%20r='0.8'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='35'%20cy='23'%20r='1.3'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='43'%20cy='206'%20r='1.3'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='49'%20cy='81'%20r='1.3'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='50'%20cy='442'%20r='1.3'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='28'%20cy='459'%20r='1'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='31'%20cy='337'%20r='0.8'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='39'%20cy='481'%20r='0.8'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='35'%20cy='387'%20r='0.8'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='30'%20cy='394'%20r='1.3'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='32'%20cy='367'%20r='1'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='50'%20cy='325'%20r='0.8'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='46'%20cy='40'%20r='0.8'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='26'%20cy='35'%20r='1.3'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='36'%20cy='138'%20r='1.3'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='45'%20cy='147'%20r='1'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='51'%20cy='166'%20r='1.3'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='31'%20cy='491'%20r='1.3'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='34'%20cy='261'%20r='1.3'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='33'%20cy='485'%20r='0.8'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='37'%20cy='226'%20r='1'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='35'%20cy='46'%20r='0.8'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Ccircle%20cx='43'%20cy='287'%20r='1.3'%20fill='%234e3827'%20fill-opacity='.18'/%3E%3Cpath%20d='M21,0%20L21,47%20L27,47%20L27,83%20L23,83%20L23,128%20L29,128%20L29,167%20L26,167%20L26,201%20L29,201%20L29,223%20L22,223%20L22,255%20L29,255%20L29,298%20L22,298%20L22,318%20L19,318%20L19,339%20L15,339%20L15,378%20L7,378%20L7,412%20L13,412%20L13,450%20L7,450%20L7,477%20L13,477%20L13,490%20L7,490%20L7,506%20L21,506%20L21,520'%20fill='none'%20stroke='%235b4129'%20stroke-opacity='.5'%20stroke-width='1.4'%20stroke-linejoin='round'/%3E%3Cellipse%20cx='31'%20cy='46'%20rx='5.2'%20ry='2.6'%20fill='%235f8f4a'%20fill-opacity='.9'/%3E%3Cellipse%20cx='33'%20cy='44.6'%20rx='3'%20ry='1.6'%20fill='%237bab5c'%20fill-opacity='.9'/%3E%3Cellipse%20cx='30'%20cy='166'%20rx='5.2'%20ry='2.6'%20fill='%235f8f4a'%20fill-opacity='.9'/%3E%3Cellipse%20cx='32'%20cy='164.6'%20rx='3'%20ry='1.6'%20fill='%237bab5c'%20fill-opacity='.9'/%3E%3Cellipse%20cx='33'%20cy='254'%20rx='5.2'%20ry='2.6'%20fill='%235f8f4a'%20fill-opacity='.9'/%3E%3Cellipse%20cx='35'%20cy='252.6'%20rx='3'%20ry='1.6'%20fill='%237bab5c'%20fill-opacity='.9'/%3E%3Cellipse%20cx='19'%20cy='338'%20rx='5.2'%20ry='2.6'%20fill='%235f8f4a'%20fill-opacity='.9'/%3E%3Cellipse%20cx='21'%20cy='336.6'%20rx='3'%20ry='1.6'%20fill='%237bab5c'%20fill-opacity='.9'/%3E%3Cellipse%20cx='11'%20cy='449'%20rx='5.2'%20ry='2.6'%20fill='%235f8f4a'%20fill-opacity='.9'/%3E%3Cellipse%20cx='13'%20cy='447.6'%20rx='3'%20ry='1.6'%20fill='%237bab5c'%20fill-opacity='.9'/%3E%3C/svg%3E");
+  background-repeat:repeat-y;background-size:100% auto;background-position:right top;
+  filter:drop-shadow(-3px 0 6px rgba(11,46,69,.22));
+}
+body:has(#lgBox)::after{display:none}
+
+/* ---------- B) PILIHAN AKUN: satu baris, huruf kecil, bisa dicari ---------- */
+.pk-btn{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:44px;padding:10px 12px;border:1px solid #c8d4de;border-radius:9px;background:#fff;color:var(--text);font-size:14px;text-align:left;cursor:pointer}
+.pk-btn:focus-visible{outline:2px solid var(--lagoon);outline-offset:1px;border-color:var(--lagoon)}
+.pk-val{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pk-btn.ph .pk-val{color:var(--muted)}
+.pk-btn svg{flex:0 0 16px;width:16px;height:16px;color:#66788a}
+#pkSheet{position:fixed;inset:0;z-index:250;display:none}
+#pkSheet.on{display:block}
+.pk-back{position:absolute;inset:0;background:rgba(11,46,69,.45)}
+.pk-box{position:absolute;left:0;right:0;bottom:0;max-height:78vh;display:flex;flex-direction:column;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -10px 30px rgba(11,46,69,.25);padding-bottom:var(--safe-b);animation:pkNaik .22s ease}
+@keyframes pkNaik{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
+.pk-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 6px}
+.pk-title{font-size:15px;font-weight:600;color:var(--deep)}
+.pk-x{border:0;background:#e8eff3;color:#27465b;width:32px;height:32px;border-radius:50%;font-size:20px;line-height:1;cursor:pointer}
+.pk-cari{padding:6px 16px 10px}
+.pk-cari input{width:100%;min-height:42px;font-size:16px;padding:9px 12px;border:1px solid #c8d4de;border-radius:10px;background:#f7fafb}
+.pk-list{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 8px 12px;border-top:1px solid var(--line)}
+.pk-item{display:flex;align-items:center;gap:12px;width:100%;min-height:46px;padding:8px 10px;border:0;border-bottom:1px solid #eef3f6;background:transparent;text-align:left;cursor:pointer;font-size:14px;color:var(--text)}
+.pk-item:hover,.pk-item:active{background:#eef5f8}
+.pk-item.on{background:#dff1f6;font-weight:600}
+.pk-kode{flex:0 0 46px;font-weight:600;color:var(--lagoon-d);font-variant-numeric:tabular-nums}
+.pk-nama{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pk-item.kosong .pk-nama{color:var(--muted);font-style:italic}
+.pk-none{padding:22px 12px;text-align:center;color:var(--muted);font-size:13px}
+@media(min-width:761px){
+  .pk-box{left:50%;right:auto;bottom:auto;top:9vh;width:520px;max-height:76vh;transform:translateX(-50%);border-radius:18px;animation:none}
+}
+</style>
+<script>
+// ===== TAMBAHAN BARU: pilihan Akun satu baris & bisa dicari (Buku Besar, filter Daftar Jurnal) =====
+(function () {
+  'use strict';
+  var IDS = ['bbAkun', 'fAkun'];
+  var CHEV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 9l5-5 5 5M7 15l5 5 5-5"/></svg>';
+  var sheet = document.createElement('div');
+  sheet.id = 'pkSheet';
+  sheet.innerHTML = '<div class="pk-back"></div><div class="pk-box" role="dialog" aria-modal="true" aria-labelledby="pkTitle">' +
+    '<div class="pk-head"><div class="pk-title" id="pkTitle">Pilih akun</div><button type="button" class="pk-x" aria-label="Tutup">&times;</button></div>' +
+    '<div class="pk-cari"><input id="pkCari" type="search" placeholder="Cari kode atau nama akun" autocomplete="off" autocapitalize="none" spellcheck="false"></div>' +
+    '<div class="pk-list" id="pkList"></div></div>';
+  document.body.appendChild(sheet);
+  var cari = sheet.querySelector('#pkCari'), list = sheet.querySelector('#pkList'), judul = sheet.querySelector('#pkTitle');
+  var aktif = null;
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function pecah(t) { var m = /^\s*(\S+)\s+[—–-]\s+(.*)$/.exec(t || ''); return m ? [m[1], m[2]] : ['', t || '']; }
+  function teksTerpilih(sel) { var o = sel.options[sel.selectedIndex]; return o ? o.text : ''; }
+  function sinkron(sel, btn) {
+    var t = teksTerpilih(sel), kosong = !sel.value;
+    btn.querySelector('.pk-val').textContent = t || '-- Pilih akun --';
+    btn.classList.toggle('ph', kosong || !t);
+  }
+  function gambar() {
+    if (!aktif) return;
+    var q = cari.value.trim().toLowerCase(), sel = aktif.sel, h = '', n = 0;
+    for (var i = 0; i < sel.options.length; i++) {
+      var o = sel.options[i], t = o.text;
+      if (q && t.toLowerCase().indexOf(q) < 0) continue;
+      var p = pecah(t), kosong = !o.value;
+      h += '<button type="button" class="pk-item' + (o.value === sel.value ? ' on' : '') + (kosong ? ' kosong' : '') + '" data-v="' + esc(o.value) + '">' +
+        (kosong ? '' : '<span class="pk-kode">' + esc(p[0]) + '</span>') + '<span class="pk-nama">' + esc(kosong ? t : p[1]) + '</span></button>';
+      n++;
+    }
+    list.innerHTML = h || '<div class="pk-none">' + (sel.options.length ? 'Tidak ada akun yang cocok.' : 'Memuat data akun...') + '</div>';
+  }
+  function buka(sel, btn) {
+    aktif = { sel: sel, btn: btn };
+    var lb = document.querySelector('label[for="' + sel.id + '"]');
+    judul.textContent = lb ? 'Pilih ' + lb.textContent.trim().toLowerCase() : 'Pilih akun';
+    cari.value = ''; gambar();
+    sheet.classList.add('on'); document.body.style.overflow = 'hidden';
+    setTimeout(function () {
+      var on = list.querySelector('.pk-item.on'); if (on && on.scrollIntoView) on.scrollIntoView({ block: 'center' });
+      if (window.matchMedia('(min-width:761px)').matches) cari.focus();
+    }, 30);
+  }
+  function tutup() { sheet.classList.remove('on'); document.body.style.overflow = ''; aktif = null; }
+
+  cari.addEventListener('input', gambar);
+  sheet.querySelector('.pk-back').addEventListener('click', tutup);
+  sheet.querySelector('.pk-x').addEventListener('click', tutup);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && aktif) tutup(); });
+  list.addEventListener('click', function (e) {
+    var it = e.target.closest('.pk-item'); if (!it || !aktif) return;
+    var sel = aktif.sel, btn = aktif.btn;
+    sel.value = it.getAttribute('data-v');
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    sinkron(sel, btn); tutup();
+  });
+
+  IDS.forEach(function (id) {
+    var sel = document.getElementById(id);
+    if (!sel || sel.getAttribute('data-pk')) return;
+    sel.setAttribute('data-pk', '1');
+    var btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'pk-btn ph';
+    btn.innerHTML = '<span class="pk-val">-- Pilih akun --</span>' + CHEV;
+    sel.style.display = 'none';
+    sel.parentNode.insertBefore(btn, sel.nextSibling);
+    btn.addEventListener('click', function () { buka(sel, btn); });
+    var lb = document.querySelector('label[for="' + id + '"]');
+    if (lb) lb.addEventListener('click', function (e) { e.preventDefault(); buka(sel, btn); });
+    sel.addEventListener('change', function () { sinkron(sel, btn); });
+    new MutationObserver(function () { sinkron(sel, btn); }).observe(sel, { childList: true });
+    setInterval(function () { sinkron(sel, btn); }, 800);   // jaga bila nilai diubah lewat kode tanpa event
+    sinkron(sel, btn);
+  });
+})();
+</script>
+
+<style id="perbaikanAkun">
+/* TAMBAHAN BARU: daftar pilihan Akun (Input Jurnal) selalu 1 baris, font lebih kecil di HP */
+.pr-main,.pr-sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;word-break:normal}
+.pr-main{font-size:13.5px}
+@media(max-width:760px){.pr-main{font-size:12px;letter-spacing:-.1px}.pr-sub{font-size:11px}}
+</style>
+
 </body>
 </html>
